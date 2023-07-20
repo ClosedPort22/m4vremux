@@ -24,10 +24,13 @@ TAG_TEMPLATE = """  <Tag>
   </Tag>
 """
 
-sanitize_srt = \
-    re.compile(r'(?s)<font face=".+?">(?:{.+?})?(.+?)</font>').sub
+_remove_font = re.compile(r'(?s)<font face=".+?">(?:{.+?})?(.+?)</font>').sub
 
 is_snake_case = re.compile(r"[a-z]+(_[a-z]+)*").fullmatch
+
+
+def sanitize_srt(txt):
+    return _remove_font(r"\1", txt).replace("\\h", "")
 
 
 def get_xml(tags):
@@ -126,7 +129,7 @@ def remux(path, dest_path, ffmpeg_path, ffprobe_path,
 
         if stream["codec_type"] == "subtitle":
             # convert subtitles to SRT and remove HTML tags
-            srt_str = sanitize_srt(r"\1", subprocess.check_output([
+            srt_str = sanitize_srt(subprocess.check_output([
                 ffmpeg_path, "-i", path, "-map", f"0:{stream['index']}",
                 "-scodec", "srt", "-f", "srt", "-"
             ]).decode())
