@@ -24,6 +24,9 @@ TAG_TEMPLATE = """  <Tag>
   </Tag>
 """
 
+sanitize_srt = \
+    re.compile(r'<font face="[^"]+">(?:{[^}]+})?([^<]+)</font>').sub
+
 
 def get_xml(tags):
     return XML_TEMPLATE.format(
@@ -42,6 +45,19 @@ def ffprobe(path, args, exe_path):
 def write_text(path, text):
     with open(path, mode="w", encoding="utf-8") as f:
         f.write(text)
+
+
+class ParseAction(argparse.Action):
+    """Custom `argparse` action that transforms the argument according
+    to `parser`
+    """
+
+    def __init__(self, parser, *args, **kwargs):
+        self._parser = parser
+        super().__init__(*args, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, self._parser(values))
 
 
 class InputFiles(defaultdict):
@@ -97,14 +113,11 @@ def remux(path, dest_path, ffmpeg_path, ffprobe_path,
             break  # assume cover is the last stream
 
         if stream["codec_type"] == "subtitle":
-            # convert subtitles to SRT
-            srt_str = subprocess.check_output(
-                [ffmpeg_path, "-i", path, "-map", f"0:{stream['index']}",
-                 "-scodec", "srt", "-f", "srt", "-"]).decode()
-            # remove HTML tags
-            srt_str = re.sub(
-                r'<font face="[^"]+">(?:{\\an7})?([^<]+)</font>',
-                r"\1", srt_str)
+            # convert subtitles to SRT and remove HTML tags
+            srt_str = sanitize_srt(r"\1", subprocess.check_output([
+                ffmpeg_path, "-i", path, "-map", f"0:{stream['index']}",
+                "-scodec", "srt", "-f", "srt", "-"
+            ]).decode())
 
             file = f"{path}.sub_{stream['index']}.srt"
             delete.append(file)
@@ -149,21 +162,24 @@ def main():
         help="Path to mkvmerge executable")
 
     parser.add_argument(
-        "--override-global-tags", metavar="JSON",
-        default='{"creation_time": null, "purchase_date": null}',
+        "--override-global-tags", metavar="JSON", action=ParseAction,
+        parser=json.loads,
+        default={"creation_time": None, "purchase_date": None},
         help="A JSON object that will be parsed and merged into the global "
         "tag object. This can be used to change tags, add new ones, or "
         "redact sensitive information. Set a tag to 'null' to remove it. "
-        "By default, 'creation_time' and 'purchase_date' are removed.")
+        "By default, 'creation_time' and 'purchase_date' are removed. Set "
+        "this option to '{}' to disable this.")
     parser.add_argument(
-        "--override-track-tags", metavar="JSON",
-        default='{"creation_time": null}',
+        "--override-track-tags", metavar="JSON", action=ParseAction,
+        parser=json.loads, default={"creation_time": None},
         help="A JSON object that will be parsed and merged into each "
         "track-specific tag object. See '--override-global-tags'. By default, "
         "'creation_time' is removed.")
 
     parser.add_argument(
-        "--mkvmerge-raw-args", metavar="ARGS",
+        "--mkvmerge-raw-args", metavar="ARGS", action=ParseAction,
+        parser=shlex.split,
         help="Raw arguments passed to mkvmerge (string only!)")
 
     parser.add_argument("INPUT", help=argparse.SUPPRESS)
@@ -174,9 +190,9 @@ def main():
     retcode, delete = remux(
         args.INPUT, args.OUTPUT, ffmpeg_path=args.ffmpeg_path,
         ffprobe_path=args.ffprobe_path, mkvmerge_path=args.mkvmerge_path,
-        override_global=json.loads(args.override_global_tags),
-        override_track=json.loads(args.override_track_tags),
-        extra_args=shlex.split(args.mkvmerge_raw_args))
+        override_global=args.override_global_tags,
+        override_track=args.override_track_tags,
+        extra_args=args.mkvmerge_raw_args)
     if retcode == 0:
         print("Everything OK, deleting temp files:", delete)
         for file in delete:

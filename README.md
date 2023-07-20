@@ -6,11 +6,11 @@ Remux m4v to mkv while keeping as much metadata as possible
 See `remux.py --help`
 
 
-# Dependencies
+## Dependencies
 * `FFmpeg`
 * `FFprobe`
 * `mkvmerge`
 
 
-# License
+## License
 MIT License
