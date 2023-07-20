@@ -27,11 +27,17 @@ TAG_TEMPLATE = """  <Tag>
 sanitize_srt = \
     re.compile(r'<font face="[^"]+">(?:{[^}]+})?([^<]+)</font>').sub
 
+is_snake_case = re.compile(r"[a-z]+(_[a-z]+)*").fullmatch
+
 
 def get_xml(tags):
-    return XML_TEMPLATE.format(
-        "".join(TAG_TEMPLATE.format(name=key, string=value)
-                for key, value in tags.items() if value is not None))
+    return XML_TEMPLATE.format("".join(TAG_TEMPLATE.format(
+        # convert snake_case tags to SCREAMING_SNAKE_CASE as per
+        # specification
+        # https://www.matroska.org/technical/tagging.html
+        name=key.upper() if is_snake_case(key) else key,
+        string=value,
+    ) for key, value in tags.items() if value is not None))
 
 
 def ffprobe(path, args, exe_path):
@@ -100,6 +106,12 @@ def remux(path, dest_path, ffmpeg_path, ffprobe_path,
     jobj = ffprobe(
         path, args=["-show_streams", "-show_entries", "format"],
         exe_path=ffprobe_path)
+
+    # write title
+    try:
+        args.extend(("--title", jobj["format"]["tags"]["title"]))
+    except KeyError:
+        pass
 
     # write global tags
     global_tags = jobj["format"]["tags"]
