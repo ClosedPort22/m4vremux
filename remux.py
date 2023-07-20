@@ -25,7 +25,7 @@ TAG_TEMPLATE = """  <Tag>
 """
 
 sanitize_srt = \
-    re.compile(r'<font face="[^"]+">(?:{[^}]+})?([^<]+)</font>').sub
+    re.compile(r'(?s)<font face=".+?">(?:{.+?})?(.+?)</font>').sub
 
 is_snake_case = re.compile(r"[a-z]+(_[a-z]+)*").fullmatch
 
