@@ -70,10 +70,10 @@ class ParseAction(argparse.Action):
 
 
 class InputFiles(defaultdict):
-    """Path of input file -> a set of stream IDs for the file"""
+    """Path of input file -> a dict of (stream ID -> language code)"""
 
     def __init__(self):
-        super().__init__(set)
+        super().__init__(dict)
 
     @staticmethod
     def get_xml_path(path, tid):
@@ -84,8 +84,11 @@ class InputFiles(defaultdict):
         out = []
         for key, value in self.items():
             # tags first
-            for tid in value:
+            for tid, lang in value.items():
                 out.extend(("--tags", f"{tid}:{self.get_xml_path(key, tid)}"))
+                # set language explicitly
+                if lang:
+                    out.extend(("--language", f"{tid}:{lang}"))
             out.extend(("(", key, ")"))
         return out
 
@@ -143,11 +146,12 @@ def remux(path, dest_path, ffmpeg_path, ffprobe_path,
             file = path
             id = stream["index"]
 
+        stream_tags = stream["tags"]
         # write track tags to file
-        stream["tags"].update(override_track)
+        stream_tags.update(override_track)
         write_text(
-            input_streams.get_xml_path(file, id), get_xml(stream["tags"]))
-        input_streams[file].add(id)
+            input_streams.get_xml_path(file, id), get_xml(stream_tags))
+        input_streams[file][id] = stream_tags.get("language")
 
     args.extend(input_streams.get_args())
     args.extend(extra_args)
