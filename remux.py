@@ -106,7 +106,7 @@ def remux(path, dest_path, ffmpeg_path, ffprobe_path,
           extra_args=()):
     global_tags_path = f"{path}.global_tags.xml"
     delete = [global_tags_path]
-    args = [mkvmerge_path, "--output", dest_path,
+    args = [mkvmerge_path, "--no-date", "--output", dest_path,
             "--global-tags", global_tags_path]
 
     jobj = ffprobe(
